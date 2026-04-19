@@ -13,7 +13,7 @@ A GUI tool for batch downloading stock bulletin PDFs from Sina Finance, with sto
 
 ## Screenshots
 
-![UI Preview](user_penguin.png)
+![UI Preview](screenshot.png)
 
 ## Quick Start
 
@@ -61,3 +61,7 @@ user_penguin.png                     # Application icon
 ## License
 
 MIT License - Free & Open Source
+
+## Thanks
+
+![UI Preview](user_penguin.png)
