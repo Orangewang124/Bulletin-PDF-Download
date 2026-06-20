@@ -6,7 +6,7 @@ a = Analysis(
     ['MoonOrangeBulletinPDFDownloader.py'],
     pathex=[],
     binaries=[],
-    datas=[('user_penguin.png', '.')],
+    datas=[('user_penguin.png', '.'), ('user_penguin.ico', '.')],
     hiddenimports=['requests'],
     hookspath=[],
     hooksconfig={},

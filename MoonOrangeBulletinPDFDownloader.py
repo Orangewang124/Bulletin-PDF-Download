@@ -1,17 +1,36 @@
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+from tkinter import Text
+from ttkbootstrap.dialogs import Messagebox
+from tkinter import filedialog, PhotoImage
 import threading
 import datetime
 import os
 import requests
+from PIL import Image
 
 # ======================== 项目信息 ========================
 
 APP_NAME = "MoonOrange Bulletin PDF Downloader"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 GITHUB_URL = "https://github.com/Orangewang124/Bulletin-PDF-Download"
 COPYRIGHT_TEXT = f"{APP_NAME} v{APP_VERSION}  |  Free & Open Source  |  GitHub: {GITHUB_URL}"
 COPYRIGHT_SHORT = f"Free & Open Source  |  GitHub: {GITHUB_URL}"
+
+# ======================== 白底黑字配色方案 ========================
+
+CLR_BG_DARK = "#ffffff"
+CLR_BG_MID = "#f0f0f0"
+CLR_BG_LIGHT = "#e0e0e0"
+CLR_BG_HOVER = "#d0d0d0"
+CLR_FG_WHITE = "#1a1a1a"
+CLR_FG_LIGHT = "#333333"
+CLR_FG_DIM = "#888888"
+CLR_ACCENT = "#c0c0c0"
+CLR_BORDER = "#cccccc"
+CLR_SUCCESS = "#666666"
+CLR_FAIL = "#333333"
+CLR_SKIP = "#aaaaaa"
 
 # ======================== 核心下载逻辑 (原 tryGet.py) ========================
 
@@ -262,162 +281,286 @@ def download_batch(bulletin_list, save_path, progress_callback=None):
 
 # ======================== GUI 界面 ========================
 
-class App(tk.Tk):
+class App(ttk.Window):
     def __init__(self):
-        super().__init__()
+        super().__init__(themename="darkly")
         self.title(f"{APP_NAME} v{APP_VERSION}")
-        self.geometry("820x820")
+        self.geometry("960x860")
         self.resizable(True, True)
+        self.minsize(800, 700)
+        self.configure(bg=CLR_BG_DARK)
 
-        # 设置窗口图标
+        self._apply_monochrome_style()
+
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_penguin.png")
-        if os.path.exists(icon_path):
+        ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_penguin.ico")
+        if os.path.exists(icon_path) and not os.path.exists(ico_path):
             try:
-                icon_img = tk.PhotoImage(file=icon_path)
-                self.iconphoto(True, icon_img)
-                self._icon_img = icon_img  # 保持引用防止被回收
-            except tk.TclError:
+                pil_img = Image.open(icon_path)
+                pil_img.thumbnail((256, 256), Image.LANCZOS)
+                sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+                pil_img.save(ico_path, format='ICO', sizes=sizes)
+            except Exception:
+                pass
+        if os.path.exists(ico_path):
+            try:
+                self.iconbitmap(ico_path)
+            except Exception:
                 pass
 
-        self.stock_id = tk.StringVar(value="600388")
-        self.stock_name = tk.StringVar(value="")
+        self.stock_id = ttk.StringVar(value="600388")
+        self.stock_name = ttk.StringVar(value="")
         self.stock_valid = False
-        self.save_path = tk.StringVar(value="D:/BulletinPDFDownload/")
-        self.start_date = tk.StringVar(value="2026-01-01")
-        self.end_date = tk.StringVar(value=datetime.date.today().strftime("%Y-%m-%d"))
+        self.save_path = ttk.StringVar(value="D:/BulletinPDFDownload/")
+        self.start_date = ttk.StringVar(value=f"{datetime.date.today().year}-01-01")
+        self.end_date = ttk.StringVar(value=datetime.date.today().strftime("%Y-%m-%d"))
         self.bulletin_list = []
         self.filtered_list = []
         self.is_downloading = False
 
         self._build_ui()
+        self.after(50, self._force_log_text_style)
 
-    # ------------------------------------------------------------------ UI
+    def _force_log_text_style(self):
+        try:
+            self.log_text.configure(
+                background="#ffffff", foreground="#1a1a1a",
+                insertbackground="#1a1a1a", selectbackground="#d0d0d0",
+                selectforeground="#1a1a1a"
+            )
+        except Exception:
+            pass
+
+    def _apply_monochrome_style(self):
+        s = ttk.Style()
+        s.configure(".", background=CLR_BG_DARK, foreground=CLR_FG_WHITE,
+                     fieldbackground=CLR_BG_MID, bordercolor=CLR_BORDER,
+                     darkcolor=CLR_BG_DARK, lightcolor=CLR_BG_DARK,
+                     troughcolor=CLR_BG_MID, focuscolor=CLR_ACCENT,
+                     selectbackground=CLR_BG_HOVER, selectforeground=CLR_FG_WHITE,
+                     insertcolor=CLR_FG_WHITE, font=("Segoe UI", 10))
+
+        s.configure("TFrame", background=CLR_BG_DARK)
+        s.configure("TLabel", background=CLR_BG_DARK, foreground=CLR_FG_LIGHT, font=("Segoe UI", 10))
+        s.configure("Bold.TLabel", font=("Segoe UI", 10, "bold"), foreground=CLR_FG_WHITE)
+        s.configure("Header.TLabel", font=("Segoe UI", 18, "bold"), foreground=CLR_FG_WHITE, background=CLR_BG_DARK)
+        s.configure("SubHeader.TLabel", font=("Segoe UI", 11), foreground=CLR_FG_DIM, background=CLR_BG_DARK)
+        s.configure("Desc.TLabel", font=("Segoe UI", 10), foreground=CLR_FG_DIM, background=CLR_BG_DARK)
+        s.configure("Status.TLabel", font=("Segoe UI", 9), foreground=CLR_FG_DIM, background=CLR_BG_MID, relief="sunken")
+        s.configure("Footer.TLabel", font=("Segoe UI", 8), foreground=CLR_FG_DIM, background=CLR_BG_DARK)
+        s.configure("Progress.TLabel", font=("Segoe UI", 10, "bold"), foreground=CLR_FG_WHITE, background=CLR_BG_DARK)
+        s.configure("Count.TLabel", font=("Segoe UI", 10), foreground=CLR_FG_DIM, background=CLR_BG_DARK)
+
+        s.configure("V.TLabel", font=("Segoe UI", 10), foreground=CLR_FG_DIM, background=CLR_BG_DARK)
+        s.configure("VOK.TLabel", font=("Segoe UI", 10), foreground=CLR_FG_WHITE, background=CLR_BG_DARK)
+        s.configure("VWarn.TLabel", font=("Segoe UI", 10), foreground=CLR_FG_DIM, background=CLR_BG_DARK)
+        s.configure("VFail.TLabel", font=("Segoe UI", 10), foreground=CLR_FG_LIGHT, background=CLR_BG_DARK)
+
+        s.configure("HeaderBar.TFrame", background=CLR_BG_DARK)
+        s.configure("Card.TLabelframe", background=CLR_BG_DARK, foreground=CLR_FG_WHITE,
+                     bordercolor=CLR_BORDER, relief="groove")
+        s.configure("Card.TLabelframe.Label", background=CLR_BG_DARK, foreground=CLR_FG_WHITE,
+                     font=("Segoe UI", 10, "bold"))
+
+        s.configure("Mono.TButton", background=CLR_BG_LIGHT, foreground=CLR_FG_WHITE,
+                     bordercolor=CLR_BORDER, focuscolor=CLR_BG_HOVER, font=("Segoe UI", 10),
+                     relief="raised", padding=(10, 5))
+        s.map("Mono.TButton",
+              background=[("active", CLR_BG_HOVER), ("disabled", CLR_BG_MID)],
+              foreground=[("disabled", CLR_FG_DIM), ("active", CLR_FG_WHITE)])
+
+        s.configure("Accent.TButton", background=CLR_FG_WHITE, foreground=CLR_BG_DARK,
+                     bordercolor=CLR_FG_WHITE, font=("Segoe UI", 10, "bold"),
+                     relief="raised", padding=(10, 5))
+        s.map("Accent.TButton",
+              background=[("active", CLR_ACCENT), ("disabled", CLR_BG_MID)],
+              foreground=[("disabled", CLR_FG_DIM), ("active", CLR_BG_DARK)])
+
+        s.configure("Mono.TEntry", fieldbackground=CLR_BG_MID, foreground=CLR_FG_WHITE,
+                     bordercolor=CLR_BORDER, insertcolor=CLR_FG_WHITE,
+                     selectbackground=CLR_BG_HOVER, selectforeground=CLR_FG_WHITE)
+
+        s.configure("Mono.Treeview", background=CLR_BG_MID, foreground=CLR_FG_LIGHT,
+                     fieldbackground=CLR_BG_MID, bordercolor=CLR_BORDER,
+                     rowheight=28, font=("Segoe UI", 9))
+        s.configure("Mono.Treeview.Heading", background=CLR_BG_LIGHT, foreground=CLR_FG_WHITE,
+                     bordercolor=CLR_BORDER, font=("Segoe UI", 9, "bold"), relief="flat")
+        s.map("Mono.Treeview",
+              background=[("selected", CLR_BG_HOVER)],
+              foreground=[("selected", CLR_FG_WHITE)])
+
+        s.configure("Mono.Vertical.TScrollbar", background=CLR_BG_LIGHT,
+                     troughcolor=CLR_BG_MID, bordercolor=CLR_BORDER,
+                     arrowcolor=CLR_FG_DIM)
+        s.map("Mono.Vertical.TScrollbar",
+              background=[("active", CLR_BG_HOVER)])
+
+        s.configure("Mono.Horizontal.TProgressbar", background=CLR_FG_WHITE,
+                     troughcolor=CLR_BG_MID, bordercolor=CLR_BORDER, thickness=6)
+
+        s.configure("Mono.TSeparator", background=CLR_BORDER)
+
     def _build_ui(self):
-        # ---- 股票代码 ----
-        stock_frame = ttk.LabelFrame(self, text="股票代码", padding=8)
-        stock_frame.pack(fill="x", padx=10, pady=(10, 4))
+        self._build_header()
+        self._build_config_section()
+        self._build_action_bar()
+        self._build_list_section()
+        self._build_progress_section()
+        self._build_footer()
 
-        ttk.Label(stock_frame, text="股票代码:").pack(side="left")
-        self.stock_entry = ttk.Entry(stock_frame, textvariable=self.stock_id, width=10)
-        self.stock_entry.pack(side="left", padx=(4, 8))
+    def _build_header(self):
+        header = ttk.Frame(self, style="HeaderBar.TFrame")
+        header.pack(fill=X, padx=0, pady=0)
+
+        inner = ttk.Frame(header, padding=(20, 14), style="HeaderBar.TFrame")
+        inner.pack(fill=X)
+
+        ttk.Label(
+            inner, text="Bulletin PDF Downloader",
+            font=("Segoe UI", 18, "bold"), style="Header.TLabel"
+        ).pack(side=LEFT)
+
+        ttk.Label(
+            inner, text=f"v{APP_VERSION}",
+            font=("Segoe UI", 11), style="SubHeader.TLabel"
+        ).pack(side=LEFT, padx=(12, 0), pady=(6, 0))
+
+        ttk.Label(
+            inner, text="新浪财经公告PDF批量下载工具",
+            font=("Segoe UI", 10), style="Desc.TLabel"
+        ).pack(side=RIGHT)
+
+        ttk.Separator(self, orient=HORIZONTAL).pack(fill=X)
+
+    def _build_config_section(self):
+        config_card = ttk.Labelframe(self, text="  参数配置  ", padding=15, style="Card.TLabelframe")
+        config_card.pack(fill=X, padx=15, pady=(10, 5))
+
+        row1 = ttk.Frame(config_card, style="TFrame")
+        row1.pack(fill=X, pady=(0, 10))
+
+        ttk.Label(row1, text="股票代码", style="Bold.TLabel").pack(side=LEFT, padx=(0, 6))
+        self.stock_entry = ttk.Entry(row1, textvariable=self.stock_id, width=10, style="Mono.TEntry")
+        self.stock_entry.pack(side=LEFT, padx=(0, 8))
+        self.stock_entry.bind("<Return>", lambda e: self._validate_stock())
 
         self.btn_validate = ttk.Button(
-            stock_frame, text="验证", command=self._validate_stock
+            row1, text="验证", command=self._validate_stock,
+            style="Mono.TButton", width=8
         )
-        self.btn_validate.pack(side="left", padx=(0, 8))
+        self.btn_validate.pack(side=LEFT, padx=(0, 12))
 
-        self.stock_info_label = ttk.Label(stock_frame, text="未验证", foreground="gray")
-        self.stock_info_label.pack(side="left", padx=4)
-
-        # ---- 保存路径 ----
-        path_frame = ttk.LabelFrame(self, text="保存路径", padding=8)
-        path_frame.pack(fill="x", padx=10, pady=(10, 4))
-
-        ttk.Entry(path_frame, textvariable=self.save_path, width=60).pack(
-            side="left", fill="x", expand=True
+        self.stock_info_label = ttk.Label(
+            row1, text="未验证", style="V.TLabel"
         )
-        ttk.Button(path_frame, text="浏览...", command=self._browse_path).pack(
-            side="left", padx=(8, 0)
-        )
+        self.stock_info_label.pack(side=LEFT, padx=4)
 
-        # ---- 日期范围 ----
-        date_frame = ttk.LabelFrame(self, text="日期范围", padding=8)
-        date_frame.pack(fill="x", padx=10, pady=4)
+        ttk.Separator(row1, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=12)
 
-        ttk.Label(date_frame, text="起始日期:").pack(side="left")
-        ttk.Entry(date_frame, textvariable=self.start_date, width=12).pack(
-            side="left", padx=(4, 16)
+        ttk.Label(row1, text="日期范围", style="Bold.TLabel").pack(side=LEFT, padx=(0, 6))
+        self.start_date_entry = ttk.Entry(row1, textvariable=self.start_date, width=12, style="Mono.TEntry")
+        self.start_date_entry.pack(side=LEFT, padx=(0, 4))
+        ttk.Label(row1, text="至").pack(side=LEFT, padx=(0, 4))
+        self.end_date_entry = ttk.Entry(row1, textvariable=self.end_date, width=12, style="Mono.TEntry")
+        self.end_date_entry.pack(side=LEFT, padx=(0, 4))
+
+        row2 = ttk.Frame(config_card, style="TFrame")
+        row2.pack(fill=X, pady=(0, 0))
+
+        ttk.Label(row2, text="保存路径", style="Bold.TLabel").pack(side=LEFT, padx=(0, 6))
+        ttk.Entry(row2, textvariable=self.save_path, style="Mono.TEntry").pack(
+            side=LEFT, fill=X, expand=True, padx=(0, 8)
         )
-        ttk.Label(date_frame, text="终止日期:").pack(side="left")
-        ttk.Entry(date_frame, textvariable=self.end_date, width=12).pack(
-            side="left", padx=(4, 16)
+        ttk.Button(row2, text="浏览", command=self._browse_path, style="Mono.TButton", width=8).pack(
+            side=LEFT
         )
 
-        # ---- 操作按钮 ----
-        btn_frame = ttk.Frame(self, padding=4)
-        btn_frame.pack(fill="x", padx=10, pady=4)
+    def _build_action_bar(self):
+        bar = ttk.Frame(self, padding=(15, 8), style="TFrame")
+        bar.pack(fill=X)
 
         self.btn_preview = ttk.Button(
-            btn_frame, text="预览文件列表", command=self._preview
+            bar, text="预览列表", command=self._preview,
+            style="Accent.TButton", width=14
         )
-        self.btn_preview.pack(side="left", padx=(0, 8))
+        self.btn_preview.pack(side=LEFT, padx=(0, 10))
 
         self.btn_download = ttk.Button(
-            btn_frame, text="确认下载", command=self._start_download, state="disabled"
+            bar, text="确认下载", command=self._start_download,
+            style="Mono.TButton", width=14, state=DISABLED
         )
-        self.btn_download.pack(side="left", padx=(0, 8))
+        self.btn_download.pack(side=LEFT, padx=(0, 10))
 
-        self.progress_label = ttk.Label(btn_frame, text="")
-        self.progress_label.pack(side="left", padx=8)
+        self.progress_label = ttk.Label(bar, text="", style="Progress.TLabel")
+        self.progress_label.pack(side=LEFT, padx=8)
 
-        # ---- 文件列表 ----
-        list_frame = ttk.LabelFrame(self, text="文件列表", padding=4)
-        list_frame.pack(fill="both", expand=True, padx=10, pady=4)
+        self.count_label = ttk.Label(bar, text="", style="Count.TLabel")
+        self.count_label.pack(side=RIGHT, padx=4)
+
+    def _build_list_section(self):
+        list_card = ttk.Labelframe(self, text="  公告列表  ", padding=5, style="Card.TLabelframe")
+        list_card.pack(fill=BOTH, expand=True, padx=15, pady=(0, 5))
 
         columns = ("date", "name", "filename")
         self.tree = ttk.Treeview(
-            list_frame, columns=columns, show="headings", selectmode="extended"
+            list_card, columns=columns, show="headings",
+            selectmode="extended", style="Mono.Treeview", height=12
         )
-        self.tree.heading("date", text="日期")
-        self.tree.heading("name", text="公告名称")
-        self.tree.heading("filename", text="文件名")
-        self.tree.column("date", width=100, anchor="center")
-        self.tree.column("name", width=280, anchor="w")
-        self.tree.column("filename", width=380, anchor="w")
+        self.tree.heading("date", text="日期", anchor=W)
+        self.tree.heading("name", text="公告名称", anchor=W)
+        self.tree.heading("filename", text="文件名", anchor=W)
+        self.tree.column("date", width=110, anchor=CENTER, minwidth=90)
+        self.tree.column("name", width=300, anchor=W, minwidth=150)
+        self.tree.column("filename", width=420, anchor=W, minwidth=200)
 
-        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
+        scrollbar = ttk.Scrollbar(list_card, orient=VERTICAL, command=self.tree.yview, style="Mono.Vertical.TScrollbar")
         self.tree.configure(yscrollcommand=scrollbar.set)
-        self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.tree.pack(side=LEFT, fill=BOTH, expand=True)
+        scrollbar.pack(side=RIGHT, fill=Y)
 
-        # ---- 下载进度 ----
-        progress_frame = ttk.LabelFrame(self, text="下载进度", padding=4)
-        progress_frame.pack(fill="x", padx=10, pady=4)
+    def _build_progress_section(self):
+        progress_card = ttk.Labelframe(self, text="  下载进度  ", padding=8, style="Card.TLabelframe")
+        progress_card.pack(fill=X, padx=15, pady=(0, 5))
 
         self.progress_bar = ttk.Progressbar(
-            progress_frame, orient="horizontal", mode="determinate"
+            progress_card, style="Mono.Horizontal.TProgressbar", mode=DETERMINATE
         )
-        self.progress_bar.pack(fill="x", pady=(0, 4))
+        self.progress_bar.pack(fill=X, pady=(0, 6))
 
-        self.log_text = tk.Text(progress_frame, height=6, state="disabled", wrap="word")
-        log_scroll = ttk.Scrollbar(
-            progress_frame, orient="vertical", command=self.log_text.yview
+        log_frame = ttk.Frame(progress_card, style="TFrame")
+        log_frame.pack(fill=BOTH, expand=True)
+
+        self.log_text = Text(
+            log_frame, height=6,
+            background="#ffffff", foreground="#1a1a1a",
+            insertbackground="#1a1a1a", selectbackground="#d0d0d0",
+            selectforeground="#1a1a1a", borderwidth=1,
+            relief="sunken", font=("Consolas", 9),
+            wrap="word"
         )
-        self.log_text.configure(yscrollcommand=log_scroll.set)
-        self.log_text.pack(side="left", fill="both", expand=True)
-        log_scroll.pack(side="right", fill="y")
+        self.log_text.pack(side=LEFT, fill=BOTH, expand=True)
 
-        # 日志颜色标签
-        self.log_text.tag_configure("ok", foreground="green")
-        self.log_text.tag_configure("fail", foreground="red")
-        self.log_text.tag_configure("skip", foreground="gray")
+        log_scrollbar = ttk.Scrollbar(log_frame, orient=VERTICAL, command=self.log_text.yview, style="Mono.Vertical.TScrollbar")
+        self.log_text.configure(yscrollcommand=log_scrollbar.set)
+        log_scrollbar.pack(side=RIGHT, fill=Y)
 
-        # ---- 底部状态栏 ----
-        self.status_var = tk.StringVar(value="就绪")
-        ttk.Label(self, textvariable=self.status_var, relief="sunken", anchor="w").pack(
-            fill="x", padx=10, pady=(0, 2)
+        self.log_text.tag_configure("ok", foreground="#1a1a1a", font=("Consolas", 9))
+        self.log_text.tag_configure("fail", foreground="#cc0000", font=("Consolas", 9, "bold"))
+        self.log_text.tag_configure("skip", foreground="#888888", font=("Consolas", 9))
+
+    def _build_footer(self):
+        footer = ttk.Frame(self, padding=(15, 4), style="TFrame")
+        footer.pack(fill=X, side=BOTTOM)
+
+        self.status_var = ttk.StringVar(value=f"就绪  |  {COPYRIGHT_SHORT}")
+        status_label = ttk.Label(
+            footer, textvariable=self.status_var,
+            style="Status.TLabel", anchor=W, padding=(8, 3), cursor="hand2"
         )
+        status_label.pack(fill=X)
+        status_label.bind("<Button-1>", lambda e: self._open_github())
 
-        # ---- 底部版权信息 ----
-        copyright_frame = tk.Frame(self)
-        copyright_frame.pack(fill="x", padx=10, pady=(0, 6))
-
-        copyright_label = tk.Label(
-            copyright_frame,
-            text=COPYRIGHT_SHORT,
-            fg="gray",
-            anchor="center",
-            font=("", 9),
-        )
-        copyright_label.pack(fill="x")
-
-        # 点击版权信息打开 GitHub
-        copyright_label.bind("<Button-1>", lambda e: self._open_github())
-        copyright_label.configure(cursor="hand2")
-
-    # ------------------------------------------------------------------ helpers
     def _open_github(self):
-        """在浏览器中打开 GitHub 仓库页面。"""
         import webbrowser
         webbrowser.open(GITHUB_URL)
 
@@ -427,33 +570,30 @@ class App(tk.Tk):
             self.save_path.set(path.replace("/", "\\") + "\\")
 
     def _log(self, msg):
-        self.log_text.configure(state="normal")
         self.log_text.insert("end", msg + "\n")
         self.log_text.see("end")
-        self.log_text.configure(state="disabled")
 
     def _validate_dates(self):
         try:
             start = datetime.datetime.strptime(self.start_date.get(), "%Y-%m-%d")
             end = datetime.datetime.strptime(self.end_date.get(), "%Y-%m-%d")
             if start > end:
-                messagebox.showerror("错误", "起始日期不能晚于终止日期")
+                Messagebox.show_error("起始日期不能晚于终止日期", title="日期错误", parent=self)
                 return None, None
             return start, end
         except ValueError:
-            messagebox.showerror("错误", "日期格式不正确，请使用 YYYY-MM-DD 格式")
+            Messagebox.show_error("日期格式不正确，请使用 YYYY-MM-DD 格式", title="日期错误", parent=self)
             return None, None
 
     def _validate_stock(self):
-        """验证股票代码是否有效。"""
         sid = self.stock_id.get().strip()
         if not sid:
-            self.stock_info_label.configure(text="请输入股票代码", foreground="red")
+            self.stock_info_label.configure(text="请输入股票代码", style="VFail.TLabel")
             self.stock_valid = False
             return
 
-        self.btn_validate.configure(state="disabled")
-        self.stock_info_label.configure(text="验证中...", foreground="gray")
+        self.btn_validate.configure(state=DISABLED)
+        self.stock_info_label.configure(text="验证中...", style="VWarn.TLabel")
         self.update_idletasks()
 
         def worker():
@@ -463,41 +603,39 @@ class App(tk.Tk):
         threading.Thread(target=worker, daemon=True).start()
 
     def _show_validate_result(self, valid, name, msg):
-        self.btn_validate.configure(state="normal")
+        self.btn_validate.configure(state=NORMAL)
         self.stock_valid = valid
         if valid:
             self.stock_name.set(name)
-            self.stock_info_label.configure(text=msg, foreground="green")
+            self.stock_info_label.configure(text=f"✔ {msg}", style="VOK.TLabel")
         else:
             self.stock_name.set("")
-            self.stock_info_label.configure(text=msg, foreground="red")
+            self.stock_info_label.configure(text=f"✖ {msg}", style="VFail.TLabel")
 
-    # ------------------------------------------------------------------ preview
     def _preview(self):
-        # 先验证股票代码
         sid = self.stock_id.get().strip()
         if not sid:
-            messagebox.showwarning("提示", "请先输入股票代码")
+            Messagebox.show_warning("请先输入股票代码", title="提示", parent=self)
             return
 
         start, end = self._validate_dates()
         if start is None:
             return
 
-        self.btn_preview.configure(state="disabled")
-        self.btn_validate.configure(state="disabled")
-        self.status_var.set("正在验证股票代码并获取公告列表，请稍候...")
-        self.stock_info_label.configure(text="验证中...", foreground="gray")
+        self.btn_preview.configure(state=DISABLED)
+        self.btn_validate.configure(state=DISABLED)
+        self.status_var.set(f"正在验证股票代码并获取公告列表，请稍候...  |  {COPYRIGHT_SHORT}")
+        self.stock_info_label.configure(text="验证中...", style="VWarn.TLabel")
+        self.count_label.configure(text="")
         self.update_idletasks()
 
         def worker():
-            # 先验证股票代码
             valid, name, vmsg = validate_stock_id(sid)
             if not valid:
                 self.after(0, self._show_validate_result, valid, name, vmsg)
-                self.after(0, lambda: self.status_var.set("股票代码验证失败"))
-                self.after(0, lambda: self.btn_preview.configure(state="normal"))
-                self.after(0, lambda: self.btn_validate.configure(state="normal"))
+                self.after(0, lambda: self.status_var.set(f"股票代码验证失败  |  {COPYRIGHT_SHORT}"))
+                self.after(0, lambda: self.btn_preview.configure(state=NORMAL))
+                self.after(0, lambda: self.btn_validate.configure(state=NORMAL))
                 return
 
             self.after(0, self._show_validate_result, valid, name, vmsg)
@@ -521,54 +659,47 @@ class App(tk.Tk):
 
         for item in self.filtered_list:
             filename = generate_filename(item)
-            self.tree.insert(
-                "", "end", values=(item["date"], item["name"], filename)
-            )
+            self.tree.insert("", END, values=(item["date"], item["name"], filename))
 
         count = len(self.filtered_list)
-        self.status_var.set(f"共找到 {count} 个公告")
-        self.btn_preview.configure(state="normal")
-        self.btn_validate.configure(state="normal")
-        self.btn_download.configure(state="normal" if count > 0 else "disabled")
+        self.status_var.set(f"共找到 {count} 个公告  |  {COPYRIGHT_SHORT}")
+        self.count_label.configure(text=f"{count} 条记录")
+        self.btn_preview.configure(state=NORMAL)
+        self.btn_validate.configure(state=NORMAL)
+        self.btn_download.configure(state=NORMAL if count > 0 else DISABLED)
 
     def _show_preview_error(self, err):
-        self.status_var.set("获取公告列表失败")
-        self.btn_preview.configure(state="normal")
-        self.btn_validate.configure(state="normal")
-        messagebox.showerror("错误", f"获取公告列表失败:\n{err}")
+        self.status_var.set(f"获取公告列表失败  |  {COPYRIGHT_SHORT}")
+        self.btn_preview.configure(state=NORMAL)
+        self.btn_validate.configure(state=NORMAL)
+        Messagebox.show_error(f"获取公告列表失败:\n{err}", title="错误", parent=self)
 
-    # ------------------------------------------------------------------ download
     def _start_download(self):
         if self.is_downloading:
             return
         if not self.filtered_list:
-            messagebox.showwarning("提示", "请先预览文件列表")
+            Messagebox.show_warning("请先预览文件列表", title="提示", parent=self)
             return
 
         save = self.save_path.get().strip()
         if not save:
-            messagebox.showerror("错误", "请设置保存路径")
+            Messagebox.show_error("请设置保存路径", title="错误", parent=self)
             return
 
         self.is_downloading = True
-        self.btn_download.configure(state="disabled")
-        self.btn_preview.configure(state="disabled")
+        self.btn_download.configure(state=DISABLED)
+        self.btn_preview.configure(state=DISABLED)
         self.progress_bar["value"] = 0
         self.progress_bar["maximum"] = len(self.filtered_list)
 
-        self.log_text.configure(state="normal")
-        self.log_text.delete("1.0", "end")
-        self.log_text.configure(state="disabled")
-
-        self.status_var.set("正在下载...")
+        self.log_text.delete("1.0", END)
+        self.status_var.set(f"正在下载...  |  {COPYRIGHT_SHORT}")
 
         def worker():
             def on_progress(idx, total, item, status, message):
                 self.after(0, self._update_download_progress, idx, total, status, message)
 
-            result = download_batch(
-                self.filtered_list, save, progress_callback=on_progress
-            )
+            result = download_batch(self.filtered_list, save, progress_callback=on_progress)
             self.after(0, self._download_finished, result)
 
         threading.Thread(target=worker, daemon=True).start()
@@ -585,15 +716,13 @@ class App(tk.Tk):
         elif status == "skip":
             tag = "skip"
 
-        self.log_text.configure(state="normal")
         self.log_text.insert("end", message + "\n", tag)
         self.log_text.see("end")
-        self.log_text.configure(state="disabled")
 
     def _download_finished(self, result):
         self.is_downloading = False
-        self.btn_download.configure(state="normal")
-        self.btn_preview.configure(state="normal")
+        self.btn_download.configure(state=NORMAL)
+        self.btn_preview.configure(state=NORMAL)
 
         s = result["success_count"]
         f = result["fail_count"]
@@ -601,18 +730,19 @@ class App(tk.Tk):
         total = s + f + k
 
         summary = f"下载完成: 共 {total} 个, 成功 {s} 个, 失败 {f} 个, 跳过 {k} 个"
-        self.status_var.set(summary)
+        self.status_var.set(f"{summary}  |  {COPYRIGHT_SHORT}")
+        self.progress_label.configure(text="完成" if f == 0 else "有失败")
         self._log(f"\n{summary}")
 
         if f > 0:
-            messagebox.showwarning(
-                "下载完成",
+            Messagebox.show_warning(
                 f"下载完成\n成功: {s}\n失败: {f}\n跳过: {k}",
+                title="下载完成", parent=self
             )
         else:
-            messagebox.showinfo(
-                "下载完成",
+            Messagebox.show_info(
                 f"下载完成\n成功: {s}\n跳过: {k}",
+                title="下载完成", parent=self
             )
 
 
