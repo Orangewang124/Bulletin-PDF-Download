@@ -2,12 +2,11 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from tkinter import Text
 from ttkbootstrap.dialogs import Messagebox
-from tkinter import filedialog, PhotoImage
+from tkinter import filedialog
 import threading
 import datetime
 import os
 import requests
-from PIL import Image
 
 # ======================== 项目信息 ========================
 
@@ -292,19 +291,10 @@ class App(ttk.Window):
 
         self._apply_monochrome_style()
 
-        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_penguin.png")
-        ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_penguin.ico")
-        if os.path.exists(icon_path) and not os.path.exists(ico_path):
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_penguin.ico")
+        if os.path.exists(icon_path):
             try:
-                pil_img = Image.open(icon_path)
-                pil_img.thumbnail((256, 256), Image.LANCZOS)
-                sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
-                pil_img.save(ico_path, format='ICO', sizes=sizes)
-            except Exception:
-                pass
-        if os.path.exists(ico_path):
-            try:
-                self.iconbitmap(ico_path)
+                self.iconbitmap(icon_path)
             except Exception:
                 pass
 
