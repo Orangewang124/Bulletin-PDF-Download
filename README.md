@@ -49,7 +49,7 @@ The output EXE will be at `dist/MoonOrangeBulletinPDFDownloader.exe`.
 MoonOrangeBulletinPDFDownloader.py   # Main application (GUI + core logic)
 MoonOrangeBulletinPDFDownloader.spec # PyInstaller build config
 build.bat                            # One-click build script
-user_penguin.png                     # Application icon
+user_penguin.ico                     # Application icon
 ```
 
 ## Dependencies
