@@ -11,7 +11,7 @@ import requests
 # ======================== 项目信息 ========================
 
 APP_NAME = "MoonOrange Bulletin PDF Downloader"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 GITHUB_URL = "https://github.com/Orangewang124/Bulletin-PDF-Download"
 COPYRIGHT_TEXT = f"{APP_NAME} v{APP_VERSION}  |  Free & Open Source  |  GitHub: {GITHUB_URL}"
 COPYRIGHT_SHORT = f"Free & Open Source  |  GitHub: {GITHUB_URL}"
@@ -190,23 +190,35 @@ def filter_by_date(bulletin_list, start_date, end_date):
     return filtered
 
 
+def sanitize_filename(name):
+    safe = name.replace("/", "／").replace("\\", "＼").replace(":", "：").replace("*", "＊").replace("?", "？").replace('"', "＂").replace("<", "＜").replace(">", "＞").replace("|", "｜")
+    return safe
+
+
 def generate_filename(item):
-    """根据公告信息生成文件名。"""
-    return f"{item['date']}-{item['name']}-{item['id']}.pdf"
+    return f"{item['date']}-{sanitize_filename(item['name'])}-{item['id']}.pdf"
 
 
-def download_pdf(item, save_path, progress_callback=None):
+def download_pdf(item, save_path, progress_callback=None, timeout=60, cancel_event=None):
     """下载单个 PDF 文件。
 
     Args:
         item: 公告信息字典
         save_path: 保存目录路径
         progress_callback: 进度回调函数，接收 (item, status, message) 参数
-            status: "success" | "fail" | "skip"
+            status: "success" | "fail" | "skip" | "timeout" | "cancelled"
+        timeout: 单个文件下载超时秒数
+        cancel_event: threading.Event，用于取消下载
 
     Returns:
-        tuple: (success: bool, message: str)
+        tuple: (success: bool, message: str, status: str)
     """
+    if cancel_event and cancel_event.is_set():
+        msg = f"{generate_filename(item)} 已取消"
+        if progress_callback:
+            progress_callback(item, "cancelled", msg)
+        return False, msg, "cancelled"
+
     os.makedirs(save_path, exist_ok=True)
     file_name = generate_filename(item)
     save_name = os.path.join(save_path, file_name)
@@ -215,65 +227,99 @@ def download_pdf(item, save_path, progress_callback=None):
         msg = f"{file_name} 已存在，跳过"
         if progress_callback:
             progress_callback(item, "skip", msg)
-        return True, msg
+        return True, msg, "skip"
 
     try:
-        response = requests.get(item["url"], timeout=30)
+        response = requests.get(item["url"], timeout=timeout)
+        if cancel_event and cancel_event.is_set():
+            msg = f"{file_name} 已取消"
+            if progress_callback:
+                progress_callback(item, "cancelled", msg)
+            return False, msg, "cancelled"
         if response.status_code == 200:
             with open(save_name, "wb") as f:
                 f.write(response.content)
             msg = f"{file_name} 下载成功"
             if progress_callback:
                 progress_callback(item, "success", msg)
-            return True, msg
+            return True, msg, "success"
         else:
             msg = f"{file_name} 下载失败，状态码: {response.status_code}"
             if progress_callback:
                 progress_callback(item, "fail", msg)
-            return False, msg
+            return False, msg, "fail"
+    except requests.exceptions.Timeout:
+        msg = f"{file_name} 下载超时（{timeout}秒），跳过"
+        if progress_callback:
+            progress_callback(item, "timeout", msg)
+        return False, msg, "timeout"
     except requests.RequestException as e:
         msg = f"{file_name} 下载异常: {e}"
         if progress_callback:
             progress_callback(item, "fail", msg)
-        return False, msg
+        return False, msg, "fail"
 
 
-def download_batch(bulletin_list, save_path, progress_callback=None):
+def download_batch(bulletin_list, save_path, progress_callback=None, timeout=60, cancel_event=None):
     """批量下载 PDF 文件。
 
     Args:
         bulletin_list: 公告信息列表
         save_path: 保存目录路径
         progress_callback: 进度回调函数，接收 (index, total, item, status, message)
+        timeout: 单个文件下载超时秒数
+        cancel_event: threading.Event，用于取消下载
 
     Returns:
-        dict: 包含 success_count, fail_count, skip_count, results 信息
+        dict: 包含 success_count, fail_count, skip_count, timeout_count, cancel_count, results 信息
     """
     total = len(bulletin_list)
     success_count = 0
     fail_count = 0
     skip_count = 0
+    timeout_count = 0
+    cancel_count = 0
     results = []
 
     for idx, item in enumerate(bulletin_list):
-        def single_callback(it, status, message):
-            nonlocal success_count, fail_count, skip_count
+        if cancel_event and cancel_event.is_set():
+            cancel_count += total - idx
+            if progress_callback:
+                progress_callback(idx, total, item, "cancelled", "用户取消下载，剩余已跳过")
+            break
+
+        captured_idx = idx
+
+        def single_callback(it, status, message, _idx=captured_idx):
+            nonlocal success_count, fail_count, skip_count, timeout_count, cancel_count
             if status == "success":
                 success_count += 1
             elif status == "fail":
                 fail_count += 1
             elif status == "skip":
                 skip_count += 1
+            elif status == "timeout":
+                timeout_count += 1
+            elif status == "cancelled":
+                cancel_count += 1
             if progress_callback:
-                progress_callback(idx, total, it, status, message)
+                progress_callback(_idx, total, it, status, message)
 
-        ok, msg = download_pdf(item, save_path, single_callback)
+        ok, msg, _ = download_pdf(item, save_path, single_callback, timeout=timeout, cancel_event=cancel_event)
         results.append({"item": item, "success": ok, "message": msg})
+
+        if cancel_event and cancel_event.is_set():
+            cancel_count += total - idx - 1
+            if progress_callback:
+                progress_callback(idx, total, item, "cancelled", "用户取消下载，剩余已跳过")
+            break
 
     return {
         "success_count": success_count,
         "fail_count": fail_count,
         "skip_count": skip_count,
+        "timeout_count": timeout_count,
+        "cancel_count": cancel_count,
         "results": results,
     }
 
@@ -307,6 +353,8 @@ class App(ttk.Window):
         self.bulletin_list = []
         self.filtered_list = []
         self.is_downloading = False
+        self.cancel_event = threading.Event()
+        self.download_timeout = 60
 
         self._build_ui()
         self.after(50, self._force_log_text_style)
@@ -480,6 +528,17 @@ class App(ttk.Window):
             style="Mono.TButton", width=14, state=DISABLED
         )
         self.btn_download.pack(side=LEFT, padx=(0, 10))
+
+        self.btn_cancel = ttk.Button(
+            bar, text="取消下载", command=self._cancel_download,
+            style="Mono.TButton", width=14, state=DISABLED
+        )
+        self.btn_cancel.pack(side=LEFT, padx=(0, 10))
+
+        ttk.Label(bar, text="超时(秒)", style="Bold.TLabel").pack(side=LEFT, padx=(0, 4))
+        self.timeout_var = ttk.StringVar(value="60")
+        self.timeout_entry = ttk.Entry(bar, textvariable=self.timeout_var, width=5, style="Mono.TEntry")
+        self.timeout_entry.pack(side=LEFT, padx=(0, 10))
 
         self.progress_label = ttk.Label(bar, text="", style="Progress.TLabel")
         self.progress_label.pack(side=LEFT, padx=8)
@@ -676,20 +735,38 @@ class App(ttk.Window):
             Messagebox.show_error("请设置保存路径", title="错误", parent=self)
             return
 
+        try:
+            self.download_timeout = int(self.timeout_var.get().strip())
+            if self.download_timeout <= 0:
+                raise ValueError
+        except ValueError:
+            Messagebox.show_error("超时秒数应为正整数", title="错误", parent=self)
+            return
+
         self.is_downloading = True
+        self.cancel_event.clear()
         self.btn_download.configure(state=DISABLED)
+        self.btn_cancel.configure(state=NORMAL)
         self.btn_preview.configure(state=DISABLED)
+        self.timeout_entry.configure(state=DISABLED)
         self.progress_bar["value"] = 0
         self.progress_bar["maximum"] = len(self.filtered_list)
 
         self.log_text.delete("1.0", END)
         self.status_var.set(f"正在下载...  |  {COPYRIGHT_SHORT}")
 
+        save_path = save
+
         def worker():
             def on_progress(idx, total, item, status, message):
                 self.after(0, self._update_download_progress, idx, total, status, message)
 
-            result = download_batch(self.filtered_list, save, progress_callback=on_progress)
+            result = download_batch(
+                self.filtered_list, save_path,
+                progress_callback=on_progress,
+                timeout=self.download_timeout,
+                cancel_event=self.cancel_event,
+            )
             self.after(0, self._download_finished, result)
 
         threading.Thread(target=worker, daemon=True).start()
@@ -705,28 +782,54 @@ class App(ttk.Window):
             tag = "fail"
         elif status == "skip":
             tag = "skip"
+        elif status in ("timeout", "cancelled"):
+            tag = "fail"
 
         self.log_text.insert("end", message + "\n", tag)
         self.log_text.see("end")
 
+    def _cancel_download(self):
+        if self.is_downloading:
+            self.cancel_event.set()
+            self.btn_cancel.configure(state=DISABLED)
+            self.status_var.set(f"正在取消下载...  |  {COPYRIGHT_SHORT}")
+
     def _download_finished(self, result):
         self.is_downloading = False
         self.btn_download.configure(state=NORMAL)
+        self.btn_cancel.configure(state=DISABLED)
         self.btn_preview.configure(state=NORMAL)
+        self.timeout_entry.configure(state=NORMAL)
 
         s = result["success_count"]
         f = result["fail_count"]
         k = result["skip_count"]
-        total = s + f + k
+        t = result["timeout_count"]
+        c = result["cancel_count"]
+        total = s + f + k + t + c
 
-        summary = f"下载完成: 共 {total} 个, 成功 {s} 个, 失败 {f} 个, 跳过 {k} 个"
+        parts = [f"共 {total} 个", f"成功 {s} 个", f"失败 {f} 个"]
+        if t > 0:
+            parts.append(f"超时 {t} 个")
+        if c > 0:
+            parts.append(f"取消 {c} 个")
+        if k > 0:
+            parts.append(f"跳过 {k} 个")
+        summary = "下载完成: " + "，".join(parts)
         self.status_var.set(f"{summary}  |  {COPYRIGHT_SHORT}")
-        self.progress_label.configure(text="完成" if f == 0 else "有失败")
+
+        has_issue = f > 0 or t > 0 or c > 0
+        self.progress_label.configure(text="完成" if not has_issue else "有失败/超时/取消")
         self._log(f"\n{summary}")
 
-        if f > 0:
+        if c > 0:
             Messagebox.show_warning(
-                f"下载完成\n成功: {s}\n失败: {f}\n跳过: {k}",
+                f"下载已取消\n成功: {s}\n失败: {f}\n超时: {t}\n取消: {c}\n跳过: {k}",
+                title="下载已取消", parent=self
+            )
+        elif has_issue:
+            Messagebox.show_warning(
+                f"下载完成\n成功: {s}\n失败: {f}\n超时: {t}\n跳过: {k}",
                 title="下载完成", parent=self
             )
         else:
